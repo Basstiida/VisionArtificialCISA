@@ -1,0 +1,10 @@
+#Archivos a ignorar del entorno
+__pycache__/
+.venv/
+
+#Archivos del sistema
+.DS_Store
+
+#Archivos del entorno visual
+.env
+.env.*
