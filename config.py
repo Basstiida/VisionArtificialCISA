@@ -38,3 +38,10 @@ N_VOTOS = 3   # lecturas iguales necesarias para confirmar un número
 
 PAD_RATIO         = 0.08
 PAD_RATIO_LATERAL = 0.25
+
+# ── Línea virtual ─────────────────────────────────────────────────────────────
+LINEA_P1     = (455, 479)    # punto 1 de la línea (x, y) en píxeles
+LINEA_P2     = (292, 262)    # punto 2 de la línea
+LADO_ENTRADA = "izquierda"   # lado del que viene el bus cuando SALE
+MANIOBRA_SEG = 20            # si vuelve a cruzar antes de 20 s, es maniobra
+DEBOUNCE_SEG = 60            # no repetir el mismo número antes de 60 s
