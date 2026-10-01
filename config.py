@@ -31,3 +31,10 @@ for _u in UNIDADES_VALIDAS:
         UNIDADES_INFO[_u] = {"empresa": "COPATSA", "tipo": "diesel"}
     else:
         UNIDADES_INFO[_u] = {"empresa": "CISA",    "tipo": "diesel"}
+
+# ── Votación ──────────────────────────────────────────────────────────────────
+N_VOTOS = 3   # lecturas iguales necesarias para confirmar un número
+
+
+PAD_RATIO         = 0.08
+PAD_RATIO_LATERAL = 0.25
