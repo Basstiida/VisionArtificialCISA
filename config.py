@@ -45,3 +45,10 @@ LINEA_P2     = (292, 262)    # punto 2 de la línea
 LADO_ENTRADA = "izquierda"   # lado del que viene el bus cuando SALE
 MANIOBRA_SEG = 20            # si vuelve a cruzar antes de 20 s, es maniobra
 DEBOUNCE_SEG = 60            # no repetir el mismo número antes de 60 s
+
+
+# ── Día operativo ─────────────────────────────────────────────────────────────
+HORA_CORTE_DIA = 3      # antes de las 3am cuenta como el día anterior (turno nocturno)
+
+# ── Sitio ─────────────────────────────────────────────────────────────────────
+ID_PATIO = "patio_01"   # identificador único de este patio
