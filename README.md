@@ -20,6 +20,7 @@ Está terminada **toda la lógica que no depende de hardware**: se puede probar 
 | Votación de lecturas por autobús | `votacion.py` | ✅ |
 | Detección de entrada / salida (línea virtual) | `linea_virtual.py` | ✅ |
 | Base de datos (eventos y estancias) | `schema.sql`, `storage.py` | ✅ |
+| Flujo completo (une todas las piezas, 2 cámaras) | `flujo.py` | ✅ |
 | Modelos YOLO (autobús, zona, dígitos) | — | Pendiente |
 | Lectura de las cámaras (RTSP) | — | Pendiente |
 | Alertas por Telegram | — | Pendiente |
@@ -66,9 +67,11 @@ ProyectoCISA/
 ├── linea_virtual.py     Decidir si el autobús entró, salió o maniobró
 ├── schema.sql           Definición de las tablas de la base de datos
 ├── storage.py           Única capa que habla con la base de datos
+├── flujo.py             Une todo: validar → votar → cruce → guardar
 ├── pruebas.py           Prueba de validación + votación (no se sube a git)
 ├── prueba_linea.py      Prueba de la línea virtual con 2 cámaras
 ├── prueba_storage.py    Prueba de la base de datos
+├── prueba_flujo.py      Simulación de 3 autobuses por las 2 puertas
 └── .gitignore
 ```
 
@@ -150,6 +153,22 @@ Ningún otro archivo escribe SQL: todos llaman a estas funciones.
 
 Cada hilo usa su propia conexión (`threading.local`) porque SQLite no permite compartir una conexión entre hilos.
 
+### `flujo.py` — todo junto
+
+Es el punto donde se juntan las piezas. Recibe lo que "ve" una cámara en un frame y hace todo el recorrido:
+
+- **`procesar_lectura(camara, track_id, cx, cy, lectura, conf, ts, zona, ruta)`**:
+  1. valida la lectura del OCR y la agrega a los votos de `(camara, track_id)`;
+  2. revisa si ya hay número confirmado;
+  3. evalúa si el bus cruzó la línea de esa cámara;
+  4. si cruzó con número confirmado, guarda el evento en la base y limpia los votos.
+
+  Regresa el evento guardado o `None`.
+
+**Cruce antes de confirmar el número.** A veces el autobús cruza la línea antes de juntar 3 lecturas iguales (por ejemplo, el número se ve mejor cuando ya está más cerca). En vez de perder ese cruce, se guarda como *pendiente*, y si el número se confirma dentro de `DEBOUNCE_SEG`, se registra con la dirección y la hora del cruce original. El sistema original hace algo parecido ("recuperación post-cruce") leyendo el estado interno de la línea virtual; aquí `flujo.py` lleva su propio registro de pendientes.
+
+Todavía no sabe nada de YOLO ni de cámaras: recibe los datos ya extraídos. Cuando se integre el hardware, el hilo de cada cámara solo tiene que llamar a `procesar_lectura` por cada autobús detectado.
+
 ---
 
 ## Decisiones de diseño
@@ -188,6 +207,7 @@ pip install opencv-python
 python pruebas.py          # validación y votación
 python prueba_linea.py     # línea virtual con 2 cámaras
 python prueba_storage.py   # base de datos
+python prueba_flujo.py     # flujo completo con 2 cámaras
 ```
 
 Resultado esperado de `pruebas.py`:
@@ -214,17 +234,32 @@ Resultado esperado de `prueba_linea.py`:
 
 Resultado esperado de `prueba_storage.py`: la `2501` dentro del patio, la `5038` con una estancia de 60 minutos y 3 eventos pendientes de sincronizar.
 
-`prueba_storage.py` crea `detecciones.db`; bórralo para empezar de cero. Está en el `.gitignore`, igual que sus archivos `-wal` y `-shm`.
+Resultado esperado de `prueba_flujo.py` (con la base vacía):
+
+```
+1) 5038 entra por la cámara 2 (número claro desde el inicio)
+  cam2 frame 3: 5038 ENTRADA
+2) 2501 sale por la cámara 1 (mismo track_id 7, otra cámara; OCR con errores)
+  cam1 frame 5: 2501 SALIDA
+3) 5001 entra por la cámara 1 pero el número se confirma DESPUÉS de cruzar
+  cam1 frame 6: 5001 ENTRADA
+
+Dentro ahora: ['5038', '5001']
+Eventos hoy:  [('5038', 'entrada', 2), ('2501', 'salida', 1), ('5001', 'entrada', 1)]
+```
+
+`prueba_storage.py` y `prueba_flujo.py` crean `detecciones.db`; bórralo para empezar de cero. Está en el `.gitignore`, igual que sus archivos `-wal` y `-shm`.
 
 ---
 
 ## Pendientes
 
 1. **Calibrar la línea virtual de la cámara 2** (`CAMARAS[2]` en `config.py`) con una imagen real de esa puerta.
-2. Integrar los modelos YOLO (autobús, zona y dígitos) y la lectura de cámaras por RTSP en la Jetson.
-3. `reasociar_numero` en `linea_virtual.py`: recuperar el historial cuando el tracker pierde un autobús y lo vuelve a encontrar con otro `track_id`.
-4. Alertas por Telegram.
-5. Dashboard web con Flask.
-6. Base central PostgreSQL y script de sincronización.
-7. Cambiar los `print` por `logging`.
-8. Confirmar que el rango de unidades eléctricas (`5001`–`5056`) sigue siendo correcto.
+2. Decidir qué hacer si llega una **entrada** de una unidad que ya tiene una estancia abierta (hoy se abre una segunda; pasa si se pierde una salida).
+3. Integrar los modelos YOLO (autobús, zona y dígitos) y la lectura de cámaras por RTSP en la Jetson.
+4. `reasociar_numero` en `linea_virtual.py`: recuperar el historial cuando el tracker pierde un autobús y lo vuelve a encontrar con otro `track_id`.
+5. Alertas por Telegram.
+6. Dashboard web con Flask.
+7. Base central PostgreSQL y script de sincronización.
+8. Cambiar los `print` por `logging`.
+9. Confirmar que el rango de unidades eléctricas (`5001`–`5056`) sigue siendo correcto.
