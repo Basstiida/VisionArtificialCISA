@@ -1,3 +1,11 @@
+import os
+
+try:                                   # en la Jetson lee el archivo .env; en la Mac puede no existir
+    from dotenv import load_dotenv
+    load_dotenv()
+except ImportError:
+    pass
+
 # ── Unidades válidas ──────────────────────────────────────────────────────────
 UNIDADES_VALIDAS = {
     "2501","2502","2503","2504","2505","2506","2507","2508","2509","2510","2514","2515",
@@ -53,3 +61,14 @@ HORA_CORTE_DIA = 3      # antes de las 3am cuenta como el día anterior (turno n
 
 # ── Sitio ─────────────────────────────────────────────────────────────────────
 ID_PATIO = "patio_01"   # identificador único de este patio
+
+# ── Modelos YOLO (archivos .engine en la Jetson; no se suben a git) ───────────
+MODELO_AUTOBUS = os.getenv("MODELO_AUTOBUS", "modelos/bus_v3.engine")             # M1: detecta el autobús
+MODELO_ZONA    = os.getenv("MODELO_ZONA",    "modelos/modelo_vista_v3.engine")    # M2: zona del número
+MODELO_DIGITOS = os.getenv("MODELO_DIGITOS", "modelos/modelo_digitos_v3.engine")  # M3: lee los dígitos
+
+# ── URLs de las cámaras (llevan contraseña: solo en .env, nunca en el código) ──
+RTSP_CAM = {
+    1: os.getenv("RTSP_CAM1", ""),
+    2: os.getenv("RTSP_CAM2", ""),
+}
