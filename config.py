@@ -40,9 +40,10 @@ PAD_RATIO         = 0.08
 PAD_RATIO_LATERAL = 0.25
 
 # ── Línea virtual ─────────────────────────────────────────────────────────────
-LINEA_P1     = (455, 479)    # punto 1 de la línea (x, y) en píxeles
-LINEA_P2     = (292, 262)    # punto 2 de la línea
-LADO_ENTRADA = "izquierda"   # lado del que viene el bus cuando SALE
+CAMARAS = {               # cada cámara vigila una puerta distinta
+    1: {"linea_p1": (280, 250), "linea_p2": (500, 479), "lado_entrada": "izquierda"},
+    2: {"linea_p1": (280, 250), "linea_p2": (500, 479), "lado_entrada": "izquierda"},  # TODO: calibrar
+}
 MANIOBRA_SEG = 20            # si vuelve a cruzar antes de 20 s, es maniobra
 DEBOUNCE_SEG = 60            # no repetir el mismo número antes de 60 s
 

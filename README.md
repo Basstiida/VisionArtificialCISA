@@ -66,7 +66,8 @@ ProyectoCISA/
 ├── linea_virtual.py     Decidir si el autobús entró, salió o maniobró
 ├── schema.sql           Definición de las tablas de la base de datos
 ├── storage.py           Única capa que habla con la base de datos
-├── pruebas.py           Pruebas de votación y línea virtual (no se sube a git)
+├── pruebas.py           Prueba de validación + votación (no se sube a git)
+├── prueba_linea.py      Prueba de la línea virtual con 2 cámaras
 ├── prueba_storage.py    Prueba de la base de datos
 └── .gitignore
 ```
@@ -86,8 +87,9 @@ Reúne en un solo lugar todos los valores que se pueden ajustar, para no tener n
   - el resto → CISA, diesel
 - **`N_VOTOS = 3`**: lecturas iguales necesarias para confirmar un número.
 - **`PAD_RATIO = 0.08` / `PAD_RATIO_LATERAL = 0.25`**: margen extra al recortar el número. El lateral lleva más porque esos números salen más pequeños y torcidos.
-- **`LINEA_P1`, `LINEA_P2`**: los dos puntos (en píxeles) que forman la línea virtual sobre la imagen de la cámara.
-- **`LADO_ENTRADA`**: de qué lado de la línea viene el autobús cuando *sale*. Si las entradas y salidas salen invertidas, se corrige aquí.
+- **`CAMARAS`**: configuración de cada cámara. Cada una vigila una puerta distinta, así que cada una tiene su propia línea virtual:
+  - `linea_p1`, `linea_p2`: los dos puntos (en píxeles) que forman la línea sobre la imagen de esa cámara. La cámara 1 usa las coordenadas reales de producción del sistema original; la cámara 2 todavía está sin calibrar.
+  - `lado_entrada`: de qué lado de la línea viene el autobús cuando *sale*. Si las entradas y salidas salen invertidas en una cámara, se corrige aquí.
 - **`MANIOBRA_SEG = 20`**: si un autobús vuelve a cruzar antes de 20 s, se está acomodando, no entrando ni saliendo.
 - **`DEBOUNCE_SEG = 60`**: no se registra el mismo número dos veces en menos de 60 s.
 - **`HORA_CORTE_DIA = 3`**: hora a la que "empieza" el día operativo (ver *Decisiones de diseño*).
@@ -117,14 +119,16 @@ Una sola lectura del OCR no es confiable: con reflejos, movimiento o ángulo, pu
 
 Se traza una línea imaginaria sobre la imagen. Cuando el centro del autobús pasa de un lado al otro, hubo un cruce.
 
-- **`lado_actual(cx, cy)`**: dice de qué lado de la línea está un punto usando el **producto cruzado**: el signo del resultado indica el lado.
-- **`evaluar_cruce(track_id, cx, cy, numero, timestamp)`**: compara el lado actual con el anterior del mismo autobús y regresa:
+- **`lado_actual(camara, cx, cy)`**: dice de qué lado de la línea de esa cámara está un punto usando el **producto cruzado**: el signo del resultado indica el lado.
+- **`evaluar_cruce(camara, track_id, cx, cy, numero, timestamp)`**: compara el lado actual con el anterior del mismo autobús en esa cámara y regresa:
   - `None` → primera vez que se ve, o sigue del mismo lado
   - `'entrada'` / `'salida'` → cruzó la línea
   - `'maniobra'` → cruzó de regreso en menos de `MANIOBRA_SEG`
   - `None` también si el mismo número ya se registró hace menos de `DEBOUNCE_SEG` (evita contar doble si el tracker cambia el `track_id` a media pasada)
 
   Usa un `threading.Lock` porque en el sistema real varios hilos consultan este estado a la vez.
+
+  Todo el estado se guarda por **`(camara, track_id)`**: el tracker de cada cámara numera sus autobuses desde 1, así que sin separarlos el autobús 7 de la cámara 1 y el 7 de la cámara 2 compartirían historial. El debounce también es por cámara, para que un autobús pueda salir por una puerta y entrar por la otra en menos de 60 s. En `votacion.py` se usa la misma llave: `agregar_voto((camara, track_id), ...)`.
 
 ### `schema.sql` — las tablas
 
@@ -181,7 +185,8 @@ Requisitos: Python 3.10+ y OpenCV (solo para las funciones de imagen).
 
 ```bash
 pip install opencv-python
-python pruebas.py          # votación y línea virtual
+python pruebas.py          # validación y votación
+python prueba_linea.py     # línea virtual con 2 cámaras
 python prueba_storage.py   # base de datos
 ```
 
@@ -193,12 +198,18 @@ Resultado esperado de `pruebas.py`:
 5038 -> None
 5036 -> None
 5038 -> 5038
-(7, 500, 300, '5038', 1000) -> None
-(7, 480, 320, '5038', 1001) -> None
-(7, 250, 450, '5038', 1002) -> salida
-(7, 500, 300, '5038', 1010) -> maniobra
-(8, 250, 450, '5001', 1100) -> None
-(8, 500, 300, '5001', 1101) -> entrada
+```
+
+Resultado esperado de `prueba_linea.py`:
+
+```
+(1, 7, 300, 400, '5038', 1000) -> None
+(2, 7, 450, 300, '2501', 1000) -> None
+(1, 7, 450, 300, '5038', 1002) -> salida
+(2, 7, 300, 400, '2501', 1003) -> entrada
+(1, 7, 300, 400, '5038', 1010) -> maniobra
+(2, 9, 450, 300, '5038', 1030) -> None
+(2, 9, 300, 400, '5038', 1031) -> entrada
 ```
 
 Resultado esperado de `prueba_storage.py`: la `2501` dentro del patio, la `5038` con una estancia de 60 minutos y 3 eventos pendientes de sincronizar.
@@ -209,7 +220,7 @@ Resultado esperado de `prueba_storage.py`: la `2501` dentro del patio, la `5038`
 
 ## Pendientes
 
-1. **Definir el papel de las 2 cámaras**: si vigilan puertas distintas, cada una registra sus propios cruces; si ven la misma puerta, hay que evitar registrar cada cruce dos veces.
+1. **Calibrar la línea virtual de la cámara 2** (`CAMARAS[2]` en `config.py`) con una imagen real de esa puerta.
 2. Integrar los modelos YOLO (autobús, zona y dígitos) y la lectura de cámaras por RTSP en la Jetson.
 3. `reasociar_numero` en `linea_virtual.py`: recuperar el historial cuando el tracker pierde un autobús y lo vuelve a encontrar con otro `track_id`.
 4. Alertas por Telegram.
