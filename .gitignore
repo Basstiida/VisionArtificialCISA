@@ -19,3 +19,5 @@ modelos/
 
 #Fotos del diagnóstico
 diag_cam*.jpg
+diagnostico_resultado.txt
+diagnostico_*.zip
